@@ -1,0 +1,27 @@
+{
+    "name": "ariyx/http-client",
+    "description": "A PHP HTTP client for sending HTTP/HTTPS requests.",
+    "type": "library",
+    "require": {
+        "php": "^8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ariyx\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Ariyx\\Tests\\": "tests/"
+        }
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Armin Malekzadeh",
+            "email": "arixologist@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
