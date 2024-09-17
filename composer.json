@@ -2,6 +2,7 @@
     "name": "ariyx/http-client",
     "description": "A PHP HTTP client for sending HTTP/HTTPS requests.",
     "type": "library",
+    "version": "1.2.0",
     "require": {
         "php": "^8.2"
     },
