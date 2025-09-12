@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Authentication Example
  *
@@ -11,6 +9,8 @@ declare(strict_types=1);
  * @author  Armin Malekzadeh <arixologist@gmail.com>
  * @version 2.0.0
  */
+
+declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 

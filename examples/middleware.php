@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Middleware Example
  *
@@ -11,6 +9,8 @@ declare(strict_types=1);
  * @author  Armin Malekzadeh <arixologist@gmail.com>
  * @version 2.0.0
  */
+
+declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
@@ -101,7 +101,8 @@ for ($i = 1; $i <= 7; $i++) {
         $startTime = microtime(true);
         $response = $client->get('https://httpbin.org/delay/1');
         $endTime = microtime(true);
-        echo "Status: " . $response->getStatusCode() . ", Duration: " . round(($endTime - $startTime) * 1000, 2) . "ms\n";
+        $duration = round(($endTime - $startTime) * 1000, 2);
+        echo "Status: " . $response->getStatusCode() . ", Duration: " . $duration . "ms\n";
     } catch (Exception $e) {
         echo "Error: " . $e->getMessage() . "\n";
     }

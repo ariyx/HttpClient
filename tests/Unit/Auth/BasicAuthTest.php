@@ -34,7 +34,8 @@ class BasicAuthTest extends TestCase
         $authenticatedRequest = $auth->authenticate($request);
 
         $this->assertSame($request, $authenticatedRequest);
-        $this->assertEquals('Basic ' . base64_encode('username:password'), $authenticatedRequest->getHeader('Authorization'));
+        $expectedAuth = 'Basic ' . base64_encode('username:password');
+        $this->assertEquals($expectedAuth, $authenticatedRequest->getHeader('Authorization'));
     }
 
     public function testCanHandleSpecialCharacters(): void
