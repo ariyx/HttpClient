@@ -1,359 +1,376 @@
 <?php
 
-namespace Ariyx;
+declare(strict_types=1);
 
-use Ariyx\Logger;
+namespace Ariyx\HttpClient;
+
+use Ariyx\HttpClient\Contracts\HttpClientInterface;
+use Ariyx\HttpClient\Contracts\MiddlewareInterface;
+use Ariyx\HttpClient\Exceptions\ConnectionException;
+use Ariyx\HttpClient\Exceptions\RequestException;
+use Ariyx\HttpClient\Exceptions\TimeoutException;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 /**
- * HTTP client class for sending HTTP/HTTPS requests.
+ * Advanced HTTP Client
  *
- * This class provides methods to perform synchronous and asynchronous HTTP/HTTPS requests using cURL.
+ * A modern, feature-rich HTTP client with middleware support, authentication,
+ * retry mechanisms, and comprehensive error handling.
  *
- * @category HTTP Client
- * @package Ariyx
- * @author Armin Malekzadeh <arixologist@gmail.com>
- * @version 1.1
+ * @package Ariyx\HttpClient
+ * @author  Armin Malekzadeh <arixologist@gmail.com>
+ * @version 2.0.0
  */
-class HttpClient
+class HttpClient implements HttpClientInterface
 {
-    private readonly string $url;
-    private array $headers;
-    private array $options;
-    private ?string $cookieFile;
-    private readonly int $timeout;
-    private Logger $logger;
+    private array $defaultOptions = [];
+    private array $middleware = [];
+    private LoggerInterface $logger;
 
-    /**
-     * Constructor to initialize HttpClient with required parameters.
-     *
-     * @param string $url Base URL for requests.
-     * @param array $headers Array of HTTP headers.
-     * @param array $options Array of cURL options.
-     * @param string|null $cookieFile Path to cookie file.
-     * @param int $timeout Timeout for requests.
-     * @param Logger|null $logger Logger instance for logging.
-     */
     public function __construct(
-        string $url,
-        array $headers = [],
-        array $options = [],
-        ?string $cookieFile = null,
-        int $timeout = 60,
-        Logger $logger = null
+        array $defaultOptions = [],
+        ?LoggerInterface $logger = null
     ) {
-        $this->url = $url;
-        $this->headers = $headers;
-        $this->options = $options + [
+        $this->defaultOptions = array_merge([
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 10,
             CURLOPT_CONNECTTIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-        ];
-        $this->cookieFile = $cookieFile;
-        $this->timeout = $timeout;
-        $this->logger = $logger ?? new Logger();
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_USERAGENT => 'Ariyx HttpClient 2.0.0',
+        ], $defaultOptions);
+
+        $this->logger = $logger ?? new NullLogger();
     }
 
     /**
-     * Add a new HTTP header.
-     *
-     * @param string $header Header name.
-     * @param string $value Header value.
+     * Send a GET request
      */
-    public function addHeader(string $header, string $value): void
+    public function get(string $url, array $options = []): Response
     {
-        $this->headers[$header] = $value;
+        return $this->send(Request::get($url, $options));
     }
 
     /**
-     * Add a new cURL option.
-     *
-     * @param int $option cURL option.
-     * @param mixed $value Option value.
+     * Send a POST request
      */
-    public function addOption(int $option, mixed $value): void
+    public function post(string $url, array $options = []): Response
     {
-        $this->options[$option] = $value;
+        return $this->send(Request::post($url, $options));
     }
 
     /**
-     * Set a file path for cookie storage.
-     *
-     * @param string $cookieFile Path to cookie file.
+     * Send a PUT request
      */
-    public function setCookieFile(string $cookieFile): void
+    public function put(string $url, array $options = []): Response
     {
-        $this->cookieFile = $cookieFile;
+        return $this->send(Request::put($url, $options));
     }
 
     /**
-     * Send a GET request.
-     *
-     * @param array $params Query parameters.
-     * @param callable|null $callback Optional callback for processing response.
-     * @return string Response body.
+     * Send a PATCH request
      */
-    public function get(array $params = [],  ? callable $callback = null) : string
+    public function patch(string $url, array $options = []): Response
     {
-        $url = $this->buildUrlWithParams($params);
-        $ch = curl_init($url);
-        $this->setCommonOptions($ch);
-        curl_setopt($ch, CURLOPT_HTTPGET, true);
-
-        $this->log('Sending GET request to ' . $url, 'DEBUG');
-
-        return $this->executeRequest($ch, $callback);
+        return $this->send(Request::patch($url, $options));
     }
 
     /**
-     * Send a POST request.
-     *
-     * @param array $data POST data.
-     * @param callable|null $callback Optional callback for processing response.
-     * @return string Response body.
+     * Send a DELETE request
      */
-    public function post(array $data,  ? callable $callback = null) : string
+    public function delete(string $url, array $options = []): Response
     {
-        $ch = curl_init($this->url);
-        $this->setCommonOptions($ch);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-
-        $this->log('Sending POST request to ' . $this->url, 'DEBUG');
-
-        return $this->executeRequest($ch, $callback);
+        return $this->send(Request::delete($url, $options));
     }
 
     /**
-     * Send a PUT request.
-     *
-     * @param array $data PUT data.
-     * @param callable|null $callback Optional callback for processing response.
-     * @return string Response body.
+     * Send a HEAD request
      */
-    public function put(array $data,  ? callable $callback = null) : string
+    public function head(string $url, array $options = []): Response
     {
-        $ch = curl_init($this->url);
-        $this->setCommonOptions($ch);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-
-        $this->log('Sending PUT request to ' . $this->url, 'DEBUG');
-
-        return $this->executeRequest($ch, $callback);
+        return $this->send(Request::head($url, $options));
     }
 
     /**
-     * Send a DELETE request.
-     *
-     * @param callable|null $callback Optional callback for processing response.
-     * @return string Response body.
+     * Send an OPTIONS request
      */
-    public function delete( ? callable $callback = null) : string
+    public function options(string $url, array $options = []): Response
     {
-        $ch = curl_init($this->url);
-        $this->setCommonOptions($ch);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
-
-        $this->log('Sending DELETE request to ' . $this->url, 'DEBUG');
-
-        return $this->executeRequest($ch, $callback);
+        return $this->send(Request::options($url, $options));
     }
 
     /**
-     * Send a PATCH request.
-     *
-     * @param array $data PATCH data.
-     * @param callable|null $callback Optional callback for processing response.
-     * @return string Response body.
+     * Send a custom request
      */
-    public function patch(array $data,  ? callable $callback = null) : string
+    public function send(Request $request): Response
     {
-        $ch = curl_init($this->url);
-        $this->setCommonOptions($ch);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PATCH");
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-
-        $this->log('Sending PATCH request to ' . $this->url, 'DEBUG');
-
-        return $this->executeRequest($ch, $callback);
-    }
-
-    /**
-     * Send a HEAD request.
-     *
-     * @param callable|null $callback Optional callback for processing response.
-     * @return string Response body.
-     */
-    public function head( ? callable $callback = null) : string
-    {
-        $ch = curl_init($this->url);
-        $this->setCommonOptions($ch);
-        curl_setopt($ch, CURLOPT_NOBODY, true);
-
-        $this->log('Sending HEAD request to ' . $this->url, 'DEBUG');
-
-        return $this->executeRequest($ch, $callback);
-    }
-
-    /**
-     * Send an OPTIONS request.
-     *
-     * @param callable|null $callback Optional callback for processing response.
-     * @return string Response body.
-     */
-    public function options( ? callable $callback = null) : string
-    {
-        $ch = curl_init($this->url);
-        $this->setCommonOptions($ch);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "OPTIONS");
-
-        $this->log('Sending OPTIONS request to ' . $this->url, 'DEBUG');
-
-        return $this->executeRequest($ch, $callback);
-    }
-
-    /**
-     * Send multiple asynchronous requests.
-     *
-     * This method allows sending multiple requests asynchronously and returns their responses.
-     *
-     * @param array $requests Array of requests, where each request is an associative array with 'url' and optional 'options'.
-     * @return array Array of responses from each request.
-     */public function asyncRequests(array $requests): array
-{
-    $multiHandle = curl_multi_init();
-    $handles = [];
-    $responses = [];
-    $startTime = microtime(true);
-
-    foreach ($requests as $i => $request) {
-        $ch = curl_init($request['url']);
-        $this->setCommonOptions($ch);
-
-        if (isset($request['options'])) {
-            curl_setopt_array($ch, $request['options']);
+        // Apply authentication if set
+        if ($request->getAuthentication()) {
+            $request = $request->getAuthentication()->authenticate($request);
         }
 
-        curl_multi_add_handle($multiHandle, $ch);
-        $handles[$i] = $ch;
-    }
+        // Apply middleware
+        $response = $this->executeWithMiddleware($request);
 
-    $running = null;
-    do {
-        curl_multi_exec($multiHandle, $running);
-        if ($running > 0) {
-            curl_multi_select($multiHandle);
-        }
-    } while ($running > 0);
-
-    foreach ($handles as $i => $ch) {
-        $response = curl_multi_getcontent($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        if ($httpCode >= 400) {
-            $this->log("Request $i failed with status code: $httpCode", 'ERROR');
-        }
-
-        if (curl_errno($ch)) {
-            $error_message = curl_error($ch);
-            $this->log("Request $i failed with curl error: " . $error_message, 'ERROR');
-        }
-
-        $responses[$i] = $response;
-        curl_multi_remove_handle($multiHandle, $ch);
-        curl_close($ch);
-    }
-
-    curl_multi_close($multiHandle);
-
-    $duration = microtime(true) - $startTime;
-    $this->log('Total duration for async requests: ' . $duration . ' seconds', 'DEBUG');
-
-    return $responses;
-}
-
-
-    /**
-     * Build a URL with query parameters.
-     *
-     * @param array $params Array of query parameters.
-     * @return string Full URL with query parameters.
-     */
-    private function buildUrlWithParams(array $params): string
-    {
-        if (!empty($params)) {
-            $queryString = http_build_query($params);
-            return $this->url . '?' . $queryString;
-        }
-
-        return $this->url;
-    }
-
-    /**
-     * Set common cURL options for the request.
-     *
-     * @param resource $ch cURL handle.
-     */
-    private function setCommonOptions($ch): void
-    {
-        curl_setopt_array($ch, $this->options);
-
-        $headerArr = [];
-        foreach ($this->headers as $header => $value) {
-            $headerArr[] = $header . ': ' . $value;
-        }
-
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headerArr);
-
-        if ($this->cookieFile !== null) {
-            curl_setopt($ch, CURLOPT_COOKIEJAR, $this->cookieFile);
-            curl_setopt($ch, CURLOPT_COOKIEFILE, $this->cookieFile);
-        }
-
-        curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeout);
-    }
-
-    /**
-     * Execute a cURL request and handle errors.
-     *
-     * @param resource $ch cURL handle.
-     * @param callable|null $callback Optional callback for processing response.
-     * @return string Response body.
-     */
-    private function executeRequest($ch,  ? callable $callback = null) : string
-    {
-        $response = curl_exec($ch);
-
-        // Check for cURL errors
-        if (curl_errno($ch)) {
-            $error_message = curl_error($ch);
-            $this->log("cURL error: " . $error_message, 'ERROR');
-            $response = ''; // Ensure an empty string is returned on error
-        }
-
-        $httpStatusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        $this->log("Response HTTP status code: " . $httpStatusCode, 'DEBUG');
-
-        if ($callback && is_callable($callback)) {
-            return call_user_func($callback, $response);
+        // Check for HTTP errors
+        if ($response->isError()) {
+            throw RequestException::fromResponse($response, $request);
         }
 
         return $response;
     }
 
     /**
-     * Log messages with different severity levels.
-     *
-     * @param string $message Message to log.
-     * @param string $level Log level (e.g., INFO, DEBUG, ERROR).
+     * Send multiple requests asynchronously
      */
-    private function log(string $message, string $level = 'INFO'): void
+    public function sendAsync(array $requests): array
     {
-        $this->logger->log($message, $level);
+        if (empty($requests)) {
+            return [];
+        }
+
+        $multiHandle = curl_multi_init();
+        $handles = [];
+        $responses = [];
+        $startTime = microtime(true);
+
+        // Initialize all requests
+        foreach ($requests as $index => $request) {
+            if (!$request instanceof Request) {
+                throw new \InvalidArgumentException('All requests must be Request instances');
+            }
+
+            // Apply authentication if set
+            if ($request->getAuthentication()) {
+                $request = $request->getAuthentication()->authenticate($request);
+            }
+
+            $ch = $this->createCurlHandle($request);
+            curl_multi_add_handle($multiHandle, $ch);
+            $handles[$index] = ['handle' => $ch, 'request' => $request];
+        }
+
+        // Execute all requests
+        $running = null;
+        do {
+            curl_multi_exec($multiHandle, $running);
+            if ($running > 0) {
+                curl_multi_select($multiHandle);
+            }
+        } while ($running > 0);
+
+        // Process responses
+        foreach ($handles as $index => $handleData) {
+            $ch = $handleData['handle'];
+            $request = $handleData['request'];
+
+            $response = $this->createResponseFromCurl($ch, $request);
+            $response->setDuration(microtime(true) - $startTime);
+
+            $responses[$index] = $response;
+
+            curl_multi_remove_handle($multiHandle, $ch);
+            curl_close($ch);
+        }
+
+        curl_multi_close($multiHandle);
+
+        return $responses;
+    }
+
+    /**
+     * Set default options for all requests
+     */
+    public function setDefaultOptions(array $options): self
+    {
+        $this->defaultOptions = array_merge($this->defaultOptions, $options);
+        return $this;
+    }
+
+    /**
+     * Add middleware to the client
+     */
+    public function addMiddleware(MiddlewareInterface $middleware): self
+    {
+        $this->middleware[] = $middleware;
+        return $this;
+    }
+
+    /**
+     * Remove middleware from the client
+     */
+    public function removeMiddleware(string $middlewareClass): self
+    {
+        $this->middleware = array_filter($this->middleware, function ($middleware) use ($middlewareClass) {
+            return !($middleware instanceof $middlewareClass);
+        });
+        return $this;
+    }
+
+    /**
+     * Execute request with middleware
+     */
+    private function executeWithMiddleware(Request $request): Response
+    {
+        if (empty($this->middleware)) {
+            return $this->executeRequest($request);
+        }
+
+        $middleware = array_reverse($this->middleware);
+        $next = function (Request $req) {
+            return $this->executeRequest($req);
+        };
+
+        foreach ($middleware as $mw) {
+            $next = function (Request $req) use ($mw, $next) {
+                return $mw->process($req, $next);
+            };
+        }
+
+        return $next($request);
+    }
+
+    /**
+     * Execute a single request
+     */
+    private function executeRequest(Request $request): Response
+    {
+        $ch = $this->createCurlHandle($request);
+
+        $startTime = microtime(true);
+        $response = curl_exec($ch);
+        $duration = microtime(true) - $startTime;
+
+        if ($response === false) {
+            $errorCode = curl_errno($ch);
+            $errorMessage = curl_error($ch);
+            curl_close($ch);
+
+            if ($errorCode === CURLE_OPERATION_TIMEOUTED) {
+                throw TimeoutException::create($request->getTimeout(), $request->getUrl());
+            }
+
+            throw ConnectionException::fromCurlError($errorCode, $errorMessage, $request->getUrl());
+        }
+
+        $httpResponse = $this->createResponseFromCurl($ch, $request);
+        $httpResponse->setDuration($duration);
+
+        curl_close($ch);
+
+        return $httpResponse;
+    }
+
+    /**
+     * Create a cURL handle for the request
+     */
+    private function createCurlHandle(Request $request): \CurlHandle
+    {
+        $url = $request->buildUrl();
+        $ch = curl_init($url);
+
+        // Set default options - only set known valid options
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Ariyx HttpClient 2.0.0');
+
+        // Set request-specific options
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $request->getMethod());
+        curl_setopt($ch, CURLOPT_TIMEOUT, $request->getTimeout());
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, $request->shouldFollowRedirects());
+        curl_setopt($ch, CURLOPT_MAXREDIRS, $request->getMaxRedirects());
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $request->shouldVerifySSL());
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $request->shouldVerifySSL() ? 2 : 0);
+
+        // Set headers
+        if (!empty($request->getHeaders())) {
+            $headers = [];
+            foreach ($request->getHeaders() as $name => $value) {
+                $headers[] = $name . ': ' . $value;
+            }
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        }
+
+        // Set body for methods that support it
+        if (in_array($request->getMethod(), ['POST', 'PUT', 'PATCH'], true) && $request->getBody() !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $request->getBody());
+        }
+
+        // Set custom options
+        foreach ($request->getOptions() as $option => $value) {
+            if (is_int($option)) {
+                curl_setopt($ch, $option, $value);
+            }
+        }
+
+        return $ch;
+    }
+
+    /**
+     * Create a Response object from cURL handle
+     */
+    private function createResponseFromCurl(\CurlHandle $ch, Request $request): Response
+    {
+        $body = curl_multi_getcontent($ch) ?: curl_exec($ch);
+        $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $info = curl_getinfo($ch);
+
+        // Parse headers
+        $headers = [];
+        if (isset($info['request_header'])) {
+            $headerLines = explode("\r\n", $info['request_header']);
+            foreach ($headerLines as $line) {
+                if (strpos($line, ':') !== false) {
+                    [$name, $value] = explode(':', $line, 2);
+                    $headers[trim($name)] = trim($value);
+                }
+            }
+        }
+
+        $response = new Response($statusCode, $headers, $body, $info);
+        $response->setRequest($request);
+
+        return $response;
+    }
+
+    /**
+     * Get the logger
+     */
+    public function getLogger(): LoggerInterface
+    {
+        return $this->logger;
+    }
+
+    /**
+     * Set the logger
+     */
+    public function setLogger(LoggerInterface $logger): self
+    {
+        $this->logger = $logger;
+        return $this;
+    }
+
+    /**
+     * Get all middleware
+     */
+    public function getMiddleware(): array
+    {
+        return $this->middleware;
+    }
+
+    /**
+     * Get default options
+     */
+    public function getDefaultOptions(): array
+    {
+        return $this->defaultOptions;
     }
 }
