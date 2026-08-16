@@ -6,7 +6,7 @@ namespace Ariyx\HttpClient\Middleware;
 
 use Ariyx\HttpClient\Contracts\MiddlewareInterface;
 use Ariyx\HttpClient\Contracts\RequestHandlerInterface;
-use Ariyx\HttpClient\Exception\NetworkException;
+use Psr\Http\Client\NetworkExceptionInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 
@@ -33,7 +33,7 @@ final readonly class RetryMiddleware implements MiddlewareInterface
         for ($attempt = 1; $attempt <= $this->maxAttempts; ++$attempt) {
             try {
                 $response = $handler->handle($request);
-            } catch (NetworkException $exception) {
+            } catch (NetworkExceptionInterface $exception) {
                 if ($attempt === $this->maxAttempts) {
                     throw $exception;
                 }

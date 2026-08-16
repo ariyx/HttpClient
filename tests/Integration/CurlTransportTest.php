@@ -67,6 +67,7 @@ final class CurlTransportTest extends TestCase
         $request = (new Request('POST', self::$baseUri . '/ok', ['X-Request' => ['value']]))->withBody($factory->createStream('payload'));
         $response = $transport->handle($request);
         self::assertSame(200, $response->getStatusCode());
+        self::assertSame('1.1', $response->getProtocolVersion());
         self::assertSame('POST:payload', (string) $response->getBody());
         self::assertSame('value', $response->getHeaderLine('X-Request-Echo'));
         self::assertSame(['first=1', 'second=2'], $response->getHeader('Set-Cookie'));

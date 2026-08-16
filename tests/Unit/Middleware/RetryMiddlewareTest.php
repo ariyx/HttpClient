@@ -10,10 +10,24 @@ use Ariyx\HttpClient\Exception\RequestException;
 use Ariyx\HttpClient\Middleware\RetryMiddleware;
 use Nyholm\Psr7\Request;
 use Nyholm\Psr7\Response;
+use Psr\Http\Client\NetworkExceptionInterface;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
+
+final class ForeignNetworkException extends \RuntimeException implements NetworkExceptionInterface
+{
+    public function __construct(private readonly RequestInterface $request)
+    {
+        parent::__construct('foreign network failure');
+    }
+
+    public function getRequest(): RequestInterface
+    {
+        return $this->request;
+    }
+}
 
 final class RetryMiddlewareTest extends TestCase
 {
@@ -45,6 +59,23 @@ final class RetryMiddlewareTest extends TestCase
         } finally {
             self::assertSame(3, $attempts);
         }
+    }
+
+    #[Test]
+    public function it_retries_foreign_psr_network_exceptions(): void
+    {
+        $request = new Request('GET', 'https://example.test');
+        $attempts = 0;
+        $handler = $this->handler(static function () use (&$attempts, $request): ResponseInterface {
+            ++$attempts;
+            if ($attempts === 1) {
+                throw new ForeignNetworkException($request);
+            }
+            return new Response(200);
+        });
+        $response = (new RetryMiddleware(baseDelayMs: 0))->process($request, $handler);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(2, $attempts);
     }
 
     #[Test]

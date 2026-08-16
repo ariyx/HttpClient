@@ -8,8 +8,13 @@ final class CurlHeaderCollector
 {
     /** @var array<string, list<string>> */
     private array $headers = [];
+
+    /** @var array<string, string> */
+    private array $headerNames = [];
+
     private int $statusCode = 0;
     private string $reasonPhrase = '';
+    private string $protocolVersion = '';
     private ?string $error = null;
 
     public function collect(string $line): int
@@ -21,10 +26,12 @@ final class CurlHeaderCollector
             return $length;
         }
 
-        if (preg_match('#^HTTP/\d(?:\.\d)?\s+(\d{3})(?:\s+(.*))?$#', $trimmed, $matches) === 1) {
+        if (preg_match('#^HTTP/(1\.0|1\.1|2|3)\s+(\d{3})(?:\s+(.*))?$#', $trimmed, $matches) === 1) {
             $this->headers = [];
-            $this->statusCode = (int) $matches[1];
-            $this->reasonPhrase = $matches[2] ?? '';
+            $this->headerNames = [];
+            $this->protocolVersion = $matches[1];
+            $this->statusCode = (int) $matches[2];
+            $this->reasonPhrase = $matches[3] ?? '';
             return $length;
         }
 
@@ -40,8 +47,10 @@ final class CurlHeaderCollector
             $this->error = 'Malformed HTTP response header name.';
             return 0;
         }
-        $this->headers[$name] ??= [];
-        $this->headers[$name][] = $value;
+        $normalizedName = strtolower($name);
+        $outputName = $this->headerNames[$normalizedName] ??= $name;
+        $this->headers[$outputName] ??= [];
+        $this->headers[$outputName][] = $value;
 
         return $length;
     }
@@ -54,6 +63,11 @@ final class CurlHeaderCollector
     public function reasonPhrase(): string
     {
         return $this->reasonPhrase;
+    }
+
+    public function protocolVersion(): string
+    {
+        return $this->protocolVersion;
     }
 
     /** @return array<string, list<string>> */

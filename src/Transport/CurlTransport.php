@@ -47,7 +47,7 @@ final class CurlTransport implements TransportInterface
                 }
                 $this->throwCurlError($handle, $request);
             }
-            if ($collector->error() !== null || $collector->statusCode() === 0) {
+            if ($collector->error() !== null || $collector->statusCode() < 200) {
                 throw new ResponseException($collector->error() ?? 'cURL returned no valid HTTP response.');
             }
             rewind($responseBody);
@@ -55,6 +55,7 @@ final class CurlTransport implements TransportInterface
             $responseBody = null;
             $response = $this->responseFactory
                 ->createResponse($collector->statusCode(), $collector->reasonPhrase())
+                ->withProtocolVersion($collector->protocolVersion())
                 ->withBody($stream);
             foreach ($collector->headers() as $name => $values) {
                 $response = $response->withHeader($name, $values);

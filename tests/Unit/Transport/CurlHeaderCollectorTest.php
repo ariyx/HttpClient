@@ -18,8 +18,31 @@ final class CurlHeaderCollectorTest extends TestCase
             $collector->collect($line);
         }
         self::assertSame(200, $collector->statusCode());
+        self::assertSame('1.1', $collector->protocolVersion());
         self::assertSame(['a=1', 'b=2'], $collector->headers()['Set-Cookie']);
         self::assertSame(['yes'], $collector->headers()['X-Test']);
+    }
+
+    #[Test]
+    public function it_combines_case_insensitive_header_names_with_first_casing(): void
+    {
+        $collector = new CurlHeaderCollector();
+        foreach (["HTTP/1.1 200 OK\r\n", "X-Test: one\r\n", "x-test: two\r\n"] as $line) {
+            $collector->collect($line);
+        }
+        self::assertSame(['X-Test' => ['one', 'two']], $collector->headers());
+    }
+
+    #[Test]
+    public function it_retains_supported_final_protocol_versions(): void
+    {
+        foreach (['1.0', '1.1', '2', '3'] as $version) {
+            $collector = new CurlHeaderCollector();
+            $collector->collect("HTTP/1.1 100 Continue\r\n");
+            $collector->collect("HTTP/{$version} 200 OK\r\n");
+            self::assertSame(200, $collector->statusCode());
+            self::assertSame($version, $collector->protocolVersion());
+        }
     }
 
     #[Test]
