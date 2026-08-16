@@ -7,7 +7,7 @@ namespace Ariyx\HttpClient\Contracts;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 
-interface MiddlewareInterface
+interface RequestHandlerInterface
 {
-    public function process(RequestInterface $request, RequestHandlerInterface $handler): ResponseInterface;
+    public function handle(RequestInterface $request): ResponseInterface;
 }

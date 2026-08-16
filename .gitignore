@@ -42,7 +42,6 @@ composer.lock
 /temp/
 
 # Test results
-/phpunit.xml.dist
 /.phpunit.result.cache
 
 # Documentation build
