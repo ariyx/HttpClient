@@ -1,6 +1,7 @@
 {
     "name": "ariyx/http-client",
     "description": "A small PSR-18 HTTP client backed by cURL.",
+    "keywords": ["http", "http-client", "psr-18", "psr-7", "psr-17", "curl"],
     "type": "library",
     "license": "MIT",
     "authors": [
